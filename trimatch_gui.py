@@ -174,7 +174,7 @@ RIGHT_X = BOARD_X + BOARD_SIZE + 50
 RIGHT_W = WIDTH - RIGHT_X - 20
 
 # Buttons
-BUTTONS = ["New Game","Quit","History","Undo","Difficulty+","Difficulty-","Hint","Help"]
+BUTTONS = ["New Game","History","Undo","Difficulty?","Difficulty+","Difficulty-","Hint","Help","Quit"]
 button_rects = []
 for i, txt in enumerate(BUTTONS):
     button_rects.append((pygame.Rect(10,20+i*50,LEFT_W-20,40), txt))
@@ -183,6 +183,15 @@ for i, txt in enumerate(BUTTONS):
 N_IMG = pygame.image.load("noble.png").convert_alpha()
 K_IMG = pygame.image.load("knight.png").convert_alpha()
 M_IMG = pygame.image.load("mystic.png").convert_alpha()
+
+# Sounds
+pygame.mixer.init()
+pick_snd    = pygame.mixer.Sound("whoosh.ogg")
+place_snd   = pygame.mixer.Sound("pebble.ogg")
+button_snd  = pygame.mixer.Sound("light-switch.ogg")
+win_snd     = pygame.mixer.Sound("achievement.ogg")
+lose_snd    = pygame.mixer.Sound("sad-fanfare-short.ogg")
+pick_snd.set_volume(0.5)
 
 # Log buffer
 log_lines = []
@@ -320,15 +329,18 @@ while running:
         undo_stack.append((copy.deepcopy(board), history.copy(), current_player))
         apply_move_inplace(board, move)
         history.append((1, move))
+        place_snd.play()
         log(f"Computer played {move.upper()}")
         res = check_outcome(board)
         if res == 'win':
             log("Computer wins! You lose!")
             game_over = True
+            lose_snd.play()
         elif res == 'loss':
             log("Computer loses! You win!")
             level_up()
             game_over = True
+            win_snd.play()
         else:
             current_player = 2
 
@@ -340,6 +352,7 @@ while running:
             # button clicks
             for rect, txt in button_rects:
                 if rect.collidepoint(mx,my):
+                    button_snd.play()
                     if txt == "New Game": new_game(1)
                     elif txt == "Quit": running = False
                     elif txt == "History": log(' | '.join(f"{i+1}.{mv.upper()}" for i,(pl,mv) in enumerate(history)))
@@ -360,8 +373,14 @@ while running:
                             else:
                                 log("Nothing to undo.")
                         break
-                    elif txt == "Diff+": AI_MAX_DEPTH += 1; log(f"Depth now {AI_MAX_DEPTH}")
-                    elif txt == "Diff-": AI_MAX_DEPTH = max(1, AI_MAX_DEPTH-1); log(f"Depth now {AI_MAX_DEPTH}")
+                    elif txt == "Difficulty?":
+                        log(f"AI search depth is {AI_MAX_DEPTH}")
+                    elif txt == "Difficulty+":
+                        AI_MAX_DEPTH += 1
+                        log(f"Depth now {AI_MAX_DEPTH}")
+                    elif txt == "Difficulty-":
+                        AI_MAX_DEPTH = max(1, AI_MAX_DEPTH-1)
+                        log(f"Depth now {AI_MAX_DEPTH}")
                     elif txt == "Hint":
                         # Only on your turn, when the game is live
                         if current_player != 2 or game_over:
@@ -401,9 +420,12 @@ while running:
                             held_tile = None
                         if count_tile(board, tile_map[pc]) < 3:
                             held_tile = pc
+                            pick_snd.play()
                         break
                 else:
                     # board click
+                    if not evt.button == 1:
+                        held_tile = None
                     cell = mouse_to_cell(mx,my)
                     if held_tile and cell and not game_over and current_player == 2:
                         r, c = cell
@@ -414,13 +436,22 @@ while running:
                             move_str = f"{held_tile}{chr(ord('a')+c)}{3-r}"
                             apply_move_inplace(board, move_str)
                             history.append((2, move_str))
+                            place_snd.play()
                             log(f"You played {move_str.upper()}")
                             held_tile = None
                             ai_timer = now
                             res = check_outcome(board)
-                            if res == 'win': log("You win!"); level_up(); game_over = True
-                            elif res == 'loss': log("You lose!"); game_over = True
-                            else: current_player = 1
+                            if res == 'win':
+                                log("You win!")
+                                level_up()
+                                game_over = True
+                                win_snd.play()
+                            elif res == 'loss':
+                                log("You lose!")
+                                game_over = True
+                                lose_snd.play()
+                            else:
+                                current_player = 1
                         else:
                             log("Invalid move")
                     elif held_tile:
