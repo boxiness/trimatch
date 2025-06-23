@@ -148,7 +148,7 @@ def level_up():
 pygame.init()
 WIDTH, HEIGHT = 1000, 600
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("TriMatch Pygame UI")
+pygame.display.set_caption("TriMatch: Gold, Steel & Sorcery")
 FONT = pygame.font.SysFont("arial", 18)
 clock = pygame.time.Clock()
 AI_DELAY = 500
@@ -183,6 +183,7 @@ for i, txt in enumerate(BUTTONS):
 N_IMG = pygame.image.load("noble.png").convert_alpha()
 K_IMG = pygame.image.load("knight.png").convert_alpha()
 M_IMG = pygame.image.load("mystic.png").convert_alpha()
+pygame.display.set_icon(N_IMG)
 
 # Sounds
 pygame.mixer.init()
@@ -404,7 +405,7 @@ while running:
 
                     elif txt == "Help":
                         # A quick multi‐line tutorial in the log
-                        log("In TriMatch: Struggle for the City, you and your rival are the unseen hands of three competing powers—Nobles, Knights, and Mystics—each able to replace only a weaker influence with their own: gold yields to steel, steel to sorcery.")
+                        log("In TriMatch: Gold, Steel & Sorcery, you and your rival are the unseen hands of three competing powers—Nobles, Knights, and Mystics—each able to replace only a weaker influence with their own: gold yields to steel, steel to sorcery.")
                         log("On your turn, you either place a tile on an empty district or 'upgrade' a lower-rank tile (returning it to the pool).")
                         log("If you ever line up three of the same ranking in a row, column, or diagonal, you seize control of the city and win;")
                         log("but if you create a line that contains exactly one Noble, one Knight, and one Mystic, their rivalries tear the city apart and you lose.")
