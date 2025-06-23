@@ -188,14 +188,22 @@ def main():
                     print(f"{i}. Player {pl}: {mv.upper()}")
             continue
         if cmd == 'u':
-            if len(undo_stack) < 2:
-                print("Nothing to undo.")
+            if current_player == 2 and game_over: # special case where only undo once
+                if undo_stack:
+                    board, history, current_player = undo_stack.pop()
+                    game_over = False
+                    print("Last move undone; back to your turn.")
+                else:
+                    print("Nothing to undo.")
             else:
                 # pop twice: AI move + your last move
-                for _ in range(2):
-                    board, history, current_player = undo_stack.pop()
-                game_over = False
-                print("Last two moves undone; back to your turn.")
+                if len(undo_stack) >= 2:
+                    for _ in range(2):
+                        board, history, current_player = undo_stack.pop()
+                    game_over = False
+                    print("Last two moves undone; back to your turn.")
+                else:
+                    print("Nothing to undo.")
             continue
         if cmd == 'd':
             print(f"AI difficulty set to depth {AI_MAX_DEPTH}")
