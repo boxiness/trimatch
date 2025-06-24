@@ -12,6 +12,7 @@ rev_map = {v: k.upper() for k, v in tile_map.items()}
 MAX_GAME_DEPTH = 15
 AI_LEVEL = 1
 AI_MAX_DEPTH = 1
+HOTSEAT = False
 
 # Game state variables
 board = []
@@ -174,7 +175,7 @@ RIGHT_X = BOARD_X + BOARD_SIZE + 50
 RIGHT_W = WIDTH - RIGHT_X - 20
 
 # Buttons
-BUTTONS = ["New Game","History","Undo","Difficulty?","Difficulty+","Difficulty-","Hint","Help","Quit"]
+BUTTONS = ["New Game","History","Undo","Difficulty?","Difficulty+","Difficulty-","Hotseat","Hint","Help","Quit"]
 button_rects = []
 for i, txt in enumerate(BUTTONS):
     button_rects.append((pygame.Rect(10,20+i*50,LEFT_W-20,40), txt))
@@ -321,10 +322,10 @@ while running:
 
     now = pygame.time.get_ticks()
     # schedule AI move
-    if not game_over and current_player == 1 and ai_timer is None:
+    if not HOTSEAT and not game_over and current_player == 1 and ai_timer is None:
         ai_timer = now
     # AI move after delay
-    if not game_over and current_player == 1 and ai_timer and now - ai_timer >= AI_DELAY:
+    if not HOTSEAT and not game_over and current_player == 1 and ai_timer and now - ai_timer >= AI_DELAY:
         move = get_best_move(board)
         ai_timer = None
         undo_stack.append((copy.deepcopy(board), history.copy(), current_player))
@@ -358,7 +359,7 @@ while running:
                     elif txt == "Quit": running = False
                     elif txt == "History": log(' | '.join(f"{i+1}.{mv.upper()}" for i,(pl,mv) in enumerate(history)))
                     elif txt == "Undo":
-                        if current_player == 2 and game_over: # special case where only undo once
+                        if HOTSEAT or (current_player == 2 and game_over): # special case where only undo once
                             if undo_stack:
                                 board, history, current_player = undo_stack.pop()
                                 game_over = False
@@ -382,9 +383,13 @@ while running:
                     elif txt == "Difficulty-":
                         AI_MAX_DEPTH = max(1, AI_MAX_DEPTH-1)
                         log(f"Depth now {AI_MAX_DEPTH}")
+                    elif txt == "Hotseat":
+                        HOTSEAT = not HOTSEAT
+                        mode = "Human vs Human" if HOTSEAT else "Human vs AI"
+                        log(f"Mode switched to: {mode}")
                     elif txt == "Hint":
                         # Only on your turn, when the game is live
-                        if current_player != 2 or game_over:
+                        if not HOTSEAT and (current_player != 2 or game_over):
                             log("Hint only available on your turn in an ongoing game.")
                         else:
                             # Temporarily turn off depth limit
@@ -428,7 +433,7 @@ while running:
                     if not evt.button == 1:
                         held_tile = None
                     cell = mouse_to_cell(mx,my)
-                    if held_tile and cell and not game_over and current_player == 2:
+                    if held_tile and cell and not game_over and (HOTSEAT or current_player == 2):
                         r, c = cell
                         target = board[r][c]
                         val = tile_map[held_tile]
@@ -436,23 +441,25 @@ while running:
                             undo_stack.append((copy.deepcopy(board), history.copy(), current_player))
                             move_str = f"{held_tile}{chr(ord('a')+c)}{3-r}"
                             apply_move_inplace(board, move_str)
-                            history.append((2, move_str))
+                            history.append((current_player, move_str))
                             place_snd.play()
-                            log(f"You played {move_str.upper()}")
+                            log(f"You (P{current_player}) played {move_str.upper()}")
                             held_tile = None
-                            ai_timer = now
                             res = check_outcome(board)
                             if res == 'win':
-                                log("You win!")
+                                log(f"You (P{current_player}) win!")
                                 level_up()
                                 game_over = True
                                 win_snd.play()
                             elif res == 'loss':
-                                log("You lose!")
+                                log(f"You (P{current_player}) lose!")
                                 game_over = True
                                 lose_snd.play()
                             else:
-                                current_player = 1
+                                current_player = 3 - current_player
+                            if not HOTSEAT:
+                                # hand off to AI
+                                ai_timer = now
                         else:
                             log("Invalid move")
                     elif held_tile:
