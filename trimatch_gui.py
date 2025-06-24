@@ -13,44 +13,51 @@ MAX_GAME_DEPTH = 15
 AI_LEVEL = 1
 AI_MAX_DEPTH = 1
 HOTSEAT = False
+RANDOMNESS = True
 
 # Game state variables
 board = []
-history = []
+move_history = []
 undo_stack = []
 current_player = 1
 game_over = False
 held_tile = None  # 'n','k','m'
-ai_timer = None
+ai_move_timer = None
 
 # Initialize a new game state
 def new_game(start_player=1):
-    global board, history, undo_stack, current_player, game_over, held_tile, ai_timer
+    global board, move_history, undo_stack, current_player, game_over, held_tile, ai_move_timer
     board = [[None]*3 for _ in range(3)]
-    history = []
+    move_history = []
     undo_stack = []
     current_player = start_player
     game_over = False
     held_tile = None
-    ai_timer = None
+    ai_move_timer = None
     log(f"New game started. Player {current_player} to move.")
     log(f"Current difficulty level is {AI_LEVEL}.")
 
 # Check for win, loss, or draw
-def check_outcome(bd):
-    lines = []
-    for i in range(3):
-        lines.append(bd[i])
-        lines.append([bd[r][i] for r in range(3)])
-    lines.append([bd[i][i] for i in range(3)])
-    lines.append([bd[i][2-i] for i in range(3)])
-    for line in lines:
-        if None not in line and set(line) == {1,2,3}:
+def check_outcome(board_state):
+    # Returns 'win', 'loss', 'draw', or None for ongoing games based on board_state.
+    all_lines = []
+    # Rows and columns
+    for idx in range(3):
+        all_lines.append(board_state[idx])  # row
+        all_lines.append([board_state[row][idx] for row in range(3)])  # col
+    # Diagonals
+    all_lines.append([board_state[i][i] for i in range(3)])
+    all_lines.append([board_state[i][2 - i] for i in range(3)])
+    # Loss: any 1-2-3 line
+    for line in all_lines:
+        if None not in line and set(line) == {1, 2, 3}:
             return 'loss'
-    for line in lines:
+    # Win: three identical
+    for line in all_lines:
         if None not in line and line[0] == line[1] == line[2]:
             return 'win'
-    if all(bd[r][c] is not None for r in range(3) for c in range(3)):
+    # Draw: full board with no win/loss
+    if all(cell is not None for row in board_state for cell in row):
         return 'draw'
     return None
 
@@ -59,27 +66,32 @@ def count_tile(bd, val):
     return sum(cell == val for row in bd for cell in row)
 
 # Generate all legal moves
-def get_possible_moves(bd):
-    moves = []
-    for r in range(3):
-        for c in range(3):
-            target = bd[r][c]
-            col = chr(ord('a') + c)
-            row = str(3 - r)
-            for pc, val in tile_map.items():
-                if target is None and count_tile(bd, val) < 3:
-                    moves.append(f"{pc}{col}{row}")
-                elif target is not None and val > target and count_tile(bd, val) < 3:
-                    moves.append(f"{pc}{col}{row}")
-    return moves
-
-# Apply move to board (in-place)
-def apply_move_inplace(bd, m):
-    pc, col, row = m[0], m[1], m[2]
-    val = tile_map[pc]
-    c = ord(col) - ord('a')
-    r = 3 - int(row)
-    bd[r][c] = val
+def get_possible_moves(board_state):
+    # Returns a list of move strings (e.g. 'Nb2') valid from board_state.
+    legal_moves = []
+    for row_idx in range(3):
+        for col_idx in range(3):
+            existing_tile = board_state[row_idx][col_idx]
+            col_char = chr(ord('a') + col_idx)
+            row_char = str(3 - row_idx)
+            for piece_code, piece_value in tile_map.items():
+                on_board_count = count_tile(board_state, piece_value)
+                # Place on empty
+                if existing_tile is None and on_board_count < 3:
+                    legal_moves.append(f"{piece_code}{col_char}{row_char}")
+                # Upgrade lower tile
+                elif existing_tile is not None and piece_value > existing_tile and on_board_count < 3:
+                    legal_moves.append(f"{piece_code}{col_char}{row_char}")
+    return legal_moves
+    
+# Apply a move to the board in-place
+def apply_move_inplace(board_state, move_str):
+    # Executes move_str (e.g. 'Mb2') on board_state by modifying it.
+    piece_code, col_char, row_char = move_str
+    piece_value = tile_map[piece_code]
+    col_idx = ord(col_char) - ord('a')
+    row_idx = 3 - int(row_char)
+    board_state[row_idx][col_idx] = piece_value
 
 # Deep apply move, return new board
 def apply_move(bd, m):
@@ -91,56 +103,85 @@ def apply_move(bd, m):
 def board_to_key(bd): return tuple(tuple(row) for row in bd)
 def key_to_board(k): return [list(row) for row in k]
 
-# Terminal evaluation
-def evaluate_terminal(key, player):
-    bd = key_to_board(key)
-    res = check_outcome(bd)
-    if not res: return None
-    last = 3 - player
-    if res == 'win': return 1 if last == 1 else -1
-    if res == 'loss': return -1 if last == 1 else 1
-    return 0
-
+# Evaluate terminal positions for minimax
+def evaluate_terminal(board_key, player):
+    # Converts board_key to a board, checks for win/loss/draw, and returns
+    # +1/-1/0 accordingly (None if non-terminal).
+    board_state = key_to_board(board_key)
+    outcome = check_outcome(board_state)
+    if outcome is None:
+        return None
+    last_player = 3 - player
+    if outcome == 'win':
+        return 1 if last_player == 1 else -1
+    if outcome == 'loss':
+        return -1 if last_player == 1 else 1
+    return 0  # draw, which should never happen
+        
+# 5. Minimax scoring with caching
 @lru_cache(maxsize=None)
-def minimax_score(key, player, depth=0):
-    if AI_MAX_DEPTH is not None and depth >= AI_MAX_DEPTH:
-        return 0
-    term = evaluate_terminal(key, player)
-    if term is not None:
-        return term * (MAX_GAME_DEPTH - depth)
-    bd = key_to_board(key)
-    moves = get_possible_moves(bd)
+def minimax_score(board_key, player, search_depth=0):
+    """
+    # Returns a minimax score for board_key when it's player's turn,
+    # using depth-limited search and caching.
+    """
+    # Depth cutoff
+    if AI_MAX_DEPTH is not None and search_depth >= AI_MAX_DEPTH:
+        return 0  # heuristic fallback
+
+    terminal_score = evaluate_terminal(board_key, player)
+    if terminal_score is not None:
+        return terminal_score * (MAX_GAME_DEPTH - search_depth)
+
+    board_state = key_to_board(board_key)
+    legal_moves = get_possible_moves(board_state)
+
     if player == 1:
-        best = -float('inf')
-        for m in moves:
-            sc = minimax_score(board_to_key(apply_move(bd, m)), 2, depth+1)
-            if sc > best: best = sc
-        return best
+        best_score = -float('inf')
+        for move in legal_moves:
+            next_key = board_to_key(apply_move(board_state, move))
+            child_score = minimax_score(next_key, 2, search_depth + 1)
+            if child_score > best_score:
+                best_score = child_score
+        return best_score
     else:
-        worst = float('inf')
-        for m in moves:
-            sc = minimax_score(board_to_key(apply_move(bd, m)), 1, depth+1)
-            if sc < worst: worst = sc
-        return worst
-
+        worst_score = float('inf')
+        for move in legal_moves:
+            next_key = board_to_key(apply_move(board_state, move))
+            child_score = minimax_score(next_key, 1, search_depth + 1)
+            if child_score < worst_score:
+                worst_score = child_score
+        return worst_score
+        
 # Choose best AI move
-def get_best_move(bd):
-    if not history:
-        return random.choice(get_possible_moves(bd))
-    best, bm = -float('inf'), None
-    moves = get_possible_moves(bd)
-    random.shuffle(moves)
-    for m in moves:
-        sc = minimax_score(board_to_key(apply_move(bd, m)), 2, 0)
-        if sc > best: best, bm = sc, m
-    return bm
-
+def get_best_move(board_state):
+    moves = get_possible_moves(board_state)
+    # On the very first turn (empty move_history), optionally pick entirely at random
+    if not move_history and RANDOMNESS:
+        return random.choice(moves)
+    # Track the highest score seen so far and which move gave it
+    best_score = -float('inf')
+    best_move = None
+    # If you want tie-break randomness, shuffle before evaluating
+    if RANDOMNESS:
+        random.shuffle(moves)
+    for move in moves:
+        # Simulate making the move and score the resulting position
+        next_key = board_to_key(apply_move(board_state, move))
+        score = minimax_score(next_key, player=2, search_depth=0)
+        # If this move is better than any we’ve seen, remember it
+        if score > best_score:
+            best_score = score
+            best_move = move
+    return best_move
+    
 # Level up
 def level_up():
     global AI_LEVEL, AI_MAX_DEPTH
     if AI_LEVEL < 10:
         AI_LEVEL += 1
         AI_MAX_DEPTH = AI_LEVEL
+        minimax_score.cache_clear()
         log(f"You leveled up! AI depth now {AI_LEVEL}.")
     else:
         log("You've beaten the highest level!")
@@ -175,7 +216,7 @@ RIGHT_X = BOARD_X + BOARD_SIZE + 50
 RIGHT_W = WIDTH - RIGHT_X - 20
 
 # Buttons
-BUTTONS = ["New Game","History","Undo","Difficulty?","Difficulty+","Difficulty-","Hotseat","Hint","Help","Quit"]
+BUTTONS = ["New Game","History","Undo","Difficulty?","Difficulty+","Difficulty-","Hotseat","Randomness","Hint","Help","Quit"]
 button_rects = []
 for i, txt in enumerate(BUTTONS):
     button_rects.append((pygame.Rect(10,20+i*50,LEFT_W-20,40), txt))
@@ -296,10 +337,10 @@ def draw_log():
             WIN.blit(FONT.render(sub, True, BLACK), (RIGHT_X + 10, y - 20))
             y -= 20
 
-def mouse_to_cell(mx, my):
-    if BOARD_X < mx < BOARD_X+BOARD_SIZE and BOARD_Y < my < BOARD_Y+BOARD_SIZE:
-        c = (mx-BOARD_X)//120
-        r = (my-BOARD_Y)//120
+def mouse_to_cell(mouse_x, mouse_y):
+    if BOARD_X < mouse_x < BOARD_X+BOARD_SIZE and BOARD_Y < mouse_y < BOARD_Y+BOARD_SIZE:
+        c = (mouse_x-BOARD_X)//120
+        r = (mouse_y-BOARD_Y)//120
         return int(r), int(c)
     return None
 
@@ -317,20 +358,20 @@ while running:
     draw_log()
     # draw held tile under cursor
     if held_tile:
-        mx,my = pygame.mouse.get_pos()
-        draw_tile_image(tile_map[held_tile], (mx, my), 80)
+        mouse_x,mouse_y = pygame.mouse.get_pos()
+        draw_tile_image(tile_map[held_tile], (mouse_x, mouse_y), 80)
 
     now = pygame.time.get_ticks()
     # schedule AI move
-    if not HOTSEAT and not game_over and current_player == 1 and ai_timer is None:
-        ai_timer = now
+    if not HOTSEAT and not game_over and current_player == 1 and ai_move_timer is None:
+        ai_move_timer = now
     # AI move after delay
-    if not HOTSEAT and not game_over and current_player == 1 and ai_timer and now - ai_timer >= AI_DELAY:
+    if not HOTSEAT and not game_over and current_player == 1 and ai_move_timer and now - ai_move_timer >= AI_DELAY:
         move = get_best_move(board)
-        ai_timer = None
-        undo_stack.append((copy.deepcopy(board), history.copy(), current_player))
+        ai_move_timer = None
+        undo_stack.append((copy.deepcopy(board), move_history.copy(), current_player))
         apply_move_inplace(board, move)
-        history.append((1, move))
+        move_history.append((1, move))
         place_snd.play()
         log(f"Computer played {move.upper()}")
         res = check_outcome(board)
@@ -346,22 +387,23 @@ while running:
         else:
             current_player = 2
 
-    for evt in pygame.event.get():
-        if evt.type == pygame.QUIT:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
             running = False
-        elif evt.type == pygame.MOUSEBUTTONDOWN:
-            mx,my = evt.pos
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_x,mouse_y = event.pos
             # button clicks
             for rect, txt in button_rects:
-                if rect.collidepoint(mx,my):
+                if rect.collidepoint(mouse_x,mouse_y):
                     button_snd.play()
+                    held_tile = None
                     if txt == "New Game": new_game(1)
                     elif txt == "Quit": running = False
-                    elif txt == "History": log(' | '.join(f"{i+1}.{mv.upper()}" for i,(pl,mv) in enumerate(history)))
+                    elif txt == "History": log(' | '.join(f"{i+1}.{mv.upper()}" for i,(pl,mv) in enumerate(move_history)))
                     elif txt == "Undo":
                         if HOTSEAT or (current_player == 2 and game_over): # special case where only undo once
                             if undo_stack:
-                                board, history, current_player = undo_stack.pop()
+                                board, move_history, current_player = undo_stack.pop()
                                 game_over = False
                                 log("Undid last move.")
                             else:
@@ -369,7 +411,7 @@ while running:
                         else:
                             if len(undo_stack) >= 2:
                                 for _ in range(2):
-                                    board, history, current_player = undo_stack.pop()
+                                    board, move_history, current_player = undo_stack.pop()
                                 game_over = False
                                 log("Undid last two moves.")
                             else:
@@ -378,15 +420,20 @@ while running:
                     elif txt == "Difficulty?":
                         log(f"AI search depth is {AI_MAX_DEPTH}")
                     elif txt == "Difficulty+":
-                        AI_MAX_DEPTH += 1
+                        AI_MAX_DEPTH = min(MAX_GAME_DEPTH, AI_MAX_DEPTH+1)
+                        minimax_score.cache_clear()
                         log(f"Depth now {AI_MAX_DEPTH}")
                     elif txt == "Difficulty-":
                         AI_MAX_DEPTH = max(1, AI_MAX_DEPTH-1)
+                        minimax_score.cache_clear()
                         log(f"Depth now {AI_MAX_DEPTH}")
                     elif txt == "Hotseat":
                         HOTSEAT = not HOTSEAT
                         mode = "Human vs Human" if HOTSEAT else "Human vs AI"
                         log(f"Mode switched to: {mode}")
+                    elif txt == "Randomness":
+                        RANDOMNESS = not RANDOMNESS
+                        log("AI randomness is turned " + ("on." if RANDOMNESS else "off."))
                     elif txt == "Hint":
                         # Only on your turn, when the game is live
                         if not HOTSEAT and (current_player != 2 or game_over):
@@ -397,16 +444,16 @@ while running:
                             AI_MAX_DEPTH = None
                             # Evaluate each legal human move as if the AI were to play next
                             suggestions = []
-                            for m in get_possible_moves(board):
-                                sc = minimax_score(board_to_key(apply_move(board, m)), 1, 0)
-                                suggestions.append((m.upper(), sc))
+                            for move in get_possible_moves(board):
+                                score = minimax_score(board_to_key(apply_move(board, move)), 1, 0)
+                                suggestions.append((move.upper(), score))
                             AI_MAX_DEPTH = old_max
                             best_score = min(s for _, s in suggestions)
                             best_moves = [mv for mv, s in suggestions if s == best_score]
                             if best_score < 0:
                                 log("You can force a win with move(s): " + " ".join(best_moves))
                             else:
-                                log("No matter what, AI can force a win. Best you can do: " + " ".join(best_moves))
+                                log("No matter what, opponent can force a win. Best you can do: " + " ".join(best_moves))
 
                     elif txt == "Help":
                         # A quick multi‐line tutorial in the log
@@ -421,7 +468,7 @@ while running:
                     x0 = BOARD_X + i*150 - 50
                     y0 = STACK_Y - 25
                     w, h = 150, 60
-                    if x0 < mx < x0+w and y0 < my < y0+h:
+                    if x0 < mouse_x < x0+w and y0 < mouse_y < y0+h:
                         if not held_tile is None:
                             held_tile = None
                         if count_tile(board, tile_map[pc]) < 3:
@@ -430,25 +477,26 @@ while running:
                         break
                 else:
                     # board click
-                    if not evt.button == 1:
+                    if not event.button == 1:
                         held_tile = None
-                    cell = mouse_to_cell(mx,my)
+                    cell = mouse_to_cell(mouse_x,mouse_y)
                     if held_tile and cell and not game_over and (HOTSEAT or current_player == 2):
                         r, c = cell
                         target = board[r][c]
                         val = tile_map[held_tile]
                         if target is None or val > target:
-                            undo_stack.append((copy.deepcopy(board), history.copy(), current_player))
+                            undo_stack.append((copy.deepcopy(board), move_history.copy(), current_player))
                             move_str = f"{held_tile}{chr(ord('a')+c)}{3-r}"
                             apply_move_inplace(board, move_str)
-                            history.append((current_player, move_str))
+                            move_history.append((current_player, move_str))
                             place_snd.play()
                             log(f"You (P{current_player}) played {move_str.upper()}")
                             held_tile = None
                             res = check_outcome(board)
                             if res == 'win':
                                 log(f"You (P{current_player}) win!")
-                                level_up()
+                                if not HOTSEAT:
+                                    level_up()
                                 game_over = True
                                 win_snd.play()
                             elif res == 'loss':
@@ -459,14 +507,14 @@ while running:
                                 current_player = 3 - current_player
                             if not HOTSEAT:
                                 # hand off to AI
-                                ai_timer = now
+                                ai_move_timer = now
                         else:
                             log("Invalid move")
                     elif held_tile:
                         # clicked outside grid/stack: unselect
                         held_tile = None
 
-        elif evt.type == pygame.MOUSEBUTTONUP:
+        elif event.type == pygame.MOUSEBUTTONUP:
             pass
 
     pygame.display.flip()
