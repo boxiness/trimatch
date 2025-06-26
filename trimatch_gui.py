@@ -182,9 +182,9 @@ def level_up():
         AI_LEVEL += 1
         AI_MAX_DEPTH = AI_LEVEL
         minimax_score.cache_clear()
-        log(f"You leveled up! AI depth now {AI_LEVEL}.")
+        log(f"You leveled up! AI depth now {AI_LEVEL}.", GREEN)
     else:
-        log("You've beaten the highest level!")
+        log("You've beaten the highest level!", GREEN)
 
 # --- Pygame UI setup ---
 pygame.init()
@@ -199,10 +199,11 @@ AI_DELAY = 500
 WOOD = (170,150,120)
 OAK = (200,170,130)
 PARCHMENT = (245,238,204)
-STONE = (200,200,200)
+STONE = (210,210,210)
 BLACK = (0,0,0)
 GOLD = (212,175,55)
 BURGUNDY = (120,26,42)
+GREEN = (10, 80, 50)
 SILVER = (230,230,230)
 SKY = (135,206,235)
 
@@ -237,12 +238,12 @@ lose_snd    = pygame.mixer.Sound("sad-fanfare-short.ogg")
 pick_snd.set_volume(0.5)
 
 # Log buffer
-log_lines = []
 log_offset = 0
 MAX_LOG = 50
+log_entries: list[tuple[str, tuple[int,int,int]]] = [] # store tuples of (message, pygame.Color)
 
-def log(msg):
-    log_lines.append(msg)
+def log(msg: str, color: tuple[int,int,int] = BLACK):
+    log_entries.append((msg, color))
 
 def wrap_text(text, font, max_width):
     words = text.split(' ')
@@ -264,7 +265,7 @@ def wrap_text(text, font, max_width):
 # Draw functions
 def draw_board():
     if game_over:
-        pygame.draw.rect(WIN, BURGUNDY, (BOARD_X-10, BOARD_Y-10, BOARD_SIZE+20, BOARD_SIZE+20), 3)
+        pygame.draw.rect(WIN, BLACK, (BOARD_X-10, BOARD_Y-10, BOARD_SIZE+20, BOARD_SIZE+20), 3)
     else:
         pygame.draw.rect(WIN, STONE, (BOARD_X-10, BOARD_Y-10, BOARD_SIZE+20, BOARD_SIZE+20), 3)
     for i in range(4):
@@ -282,7 +283,7 @@ def draw_board():
             if v:
                 draw_tile_image(v, (BOARD_X+c*120+60, BOARD_Y+r*120+60), 80)
 
-def draw_tile_icon(v, pos, size): # deprecated
+def draw_tile_icon(v, pos, size):
     x,y = pos
     if v == 1:
         pygame.draw.circle(WIN, GOLD, (x,y), size//2)
@@ -331,10 +332,11 @@ def draw_log():
     max_text_width = RIGHT_W - 20
 
     # get the last MAX_LOG lines
-    for raw_line in reversed(log_lines[-MAX_LOG-log_offset : len(log_lines)-log_offset]):
+    for (raw_text, text_color) in reversed(log_entries[-MAX_LOG-log_offset : len(log_entries)-log_offset]):
         # wrap it into sub-lines
-        for sub in reversed(wrap_text(raw_line, FONT, max_text_width)):
-            WIN.blit(FONT.render(sub, True, BLACK), (RIGHT_X + 10, y - 20))
+        for sub in reversed(wrap_text(raw_text, FONT, max_text_width)):
+            text_surf = FONT.render(sub, True, text_color)
+            WIN.blit(text_surf, (RIGHT_X + 10, y - 20))
             y -= 20
 
 def mouse_to_cell(mouse_x, mouse_y):
@@ -376,11 +378,11 @@ while running:
         log(f"Computer played {move.upper()}")
         res = check_outcome(board)
         if res == 'win':
-            log("Computer wins! You lose!")
+            log("Computer wins! You lose!", BURGUNDY)
             game_over = True
             lose_snd.play()
         elif res == 'loss':
-            log("Computer loses! You win!")
+            log("Computer loses! You win!", GREEN)
             level_up()
             game_over = True
             win_snd.play()
@@ -494,13 +496,13 @@ while running:
                             held_tile = None
                             res = check_outcome(board)
                             if res == 'win':
-                                log(f"You (P{current_player}) win!")
+                                log(f"You (P{current_player}) win!", GREEN)
                                 if not HOTSEAT:
                                     level_up()
                                 game_over = True
                                 win_snd.play()
                             elif res == 'loss':
-                                log(f"You (P{current_player}) lose!")
+                                log(f"You (P{current_player}) lose!", BURGUNDY)
                                 game_over = True
                                 lose_snd.play()
                             else:
