@@ -19,6 +19,7 @@ RANDOMNESS = True
 board = []
 move_history = []
 undo_stack = []
+undo_used, hint_used = False, False
 current_player = 1
 game_over = False
 held_tile = None  # 'n','k','m'
@@ -26,10 +27,11 @@ ai_move_timer = None
 
 # Initialize a new game state
 def new_game(start_player=1):
-    global board, move_history, undo_stack, current_player, game_over, held_tile, ai_move_timer
+    global board, move_history, undo_stack, undo_used, hint_used, current_player, game_over, held_tile, ai_move_timer
     board = [[None]*3 for _ in range(3)]
     move_history = []
     undo_stack = []
+    undo_used, hint_used = False, False
     current_player = start_player
     game_over = False
     held_tile = None
@@ -177,7 +179,10 @@ def get_best_move(board_state):
     
 # Level up
 def level_up():
-    global AI_LEVEL, AI_MAX_DEPTH
+    global AI_LEVEL, AI_MAX_DEPTH, undo_used, hint_used
+    if undo_used or hint_used:
+        log("Try to win without undo or hints.")
+        return
     if AI_LEVEL < 10:
         AI_LEVEL += 1
         AI_MAX_DEPTH = AI_LEVEL
@@ -406,6 +411,7 @@ while running:
                         if HOTSEAT or (current_player == 2 and game_over): # special case where only undo once
                             if undo_stack:
                                 board, move_history, current_player = undo_stack.pop()
+                                undo_used = True
                                 game_over = False
                                 log("Undid last move.")
                             else:
@@ -414,6 +420,7 @@ while running:
                             if len(undo_stack) >= 2:
                                 for _ in range(2):
                                     board, move_history, current_player = undo_stack.pop()
+                                undo_used = True
                                 game_over = False
                                 log("Undid last two moves.")
                             else:
@@ -456,6 +463,7 @@ while running:
                                 log("You can force a win with move(s): " + " ".join(best_moves))
                             else:
                                 log("No matter what, opponent can force a win. Best you can do: " + " ".join(best_moves))
+                            hint_used = True
 
                     elif txt == "Help":
                         # A quick multi‐line tutorial in the log
