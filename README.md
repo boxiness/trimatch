@@ -20,6 +20,20 @@ TriMatch is a two-player strategic tile-placement game on a 3×3 grid with a uni
 
 ---
 
+## Game Design Philosophy
+
+Unlike traditional puzzle games that guarantee a solution, TriMatch embraces the idea that some positions are doomed from the start—just like in life. And because you’re playing against a perfect minimax AI, the game doesn’t ask you to beat it fairly. Instead, it dares you to exploit loopholes, restart ruthlessly, and search for winnable patterns in a landscape that offers no obvious feedback.
+
+There’s no gradient of progress—only sudden cliffs. One misstep may doom you ten turns later, and you’ll never know it until it’s too late. The result? Every move becomes a quiet act of desperation or brilliance, with meaning only revealed in hindsight. TriMatch asks: What does it mean to win when the system is stacked against you?
+
+It’s a “hot potato with bombs”—each player trying to avoid being the last to act when the board explodes. And in doing so, TriMatch becomes a metaphor for survival, strategy, and subversion in a rigged world.
+
+TriMatch began as a brutally difficult game. At first, I felt it needed fixing. But then came a philosophical shift: what if the harshness is the point? TriMatch isn’t about fairness—it’s about confronting a system stacked against you, where the only path forward is to exploit, adapt, and outwit. It reflects a deeper truth: in life, you don’t always win by playing honorably—you win by surviving a rigged game using every tool available.
+
+Modern games often over-coddle players—highlighting objectives, auto-scaling enemies, offering endless tips—removing the challenge and mystery that make games meaningful. This smoothing-over kills the satisfaction of discovery and learning through failure. Older games embraced discomfort, forcing players to think, explore, and fail. That struggle was the point—and the reward. Without it, modern games risk becoming hollow theme park rides instead of true tests of skill and curiosity.
+
+---
+
 ## Installation
 
 ### Using Poetry (recommended)
