@@ -1,4 +1,4 @@
-A deceptively simple 2-player logic game on a 3×3 grid — part NIM, part Tic-Tac-Toe, all puzzle.
+A deceptively simple 2-player logic game on a 3×3 grid — part NIM, part Tic-Tac-Toe, all puzzle. Youtube video: https://youtu.be/uZbi3n0ur08?si=JEBfB5Z8j2_Mf4Hj
 
 # TriMatch
 
