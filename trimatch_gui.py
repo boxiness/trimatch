@@ -183,7 +183,7 @@ def level_up():
     if undo_used or hint_used:
         log("Try to win without undo or hints.")
         return
-    if AI_LEVEL < 10:
+    if AI_LEVEL < 9: # level 10 is actually impossible to beat
         AI_LEVEL += 1
         AI_MAX_DEPTH = AI_LEVEL
         minimax_score.cache_clear()
@@ -397,11 +397,11 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN:
+        elif event.type == pygame.MOUSEBUTTONDOWN and (event.button == 1 or event.button == 3):
             mouse_x,mouse_y = event.pos
             # button clicks
             for rect, txt in button_rects:
-                if rect.collidepoint(mouse_x,mouse_y):
+                if rect.collidepoint(mouse_x,mouse_y) and event.button == 1:
                     button_snd.play()
                     held_tile = None
                     if txt == "New Game": new_game(1)
